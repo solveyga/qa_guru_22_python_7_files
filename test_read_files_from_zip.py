@@ -1,9 +1,9 @@
 import os
-import pypdf, openpyxl, csv
+from pypdf import PdfReader
+import csv
 from zipfile import ZipFile
 import pytest
 from io import TextIOWrapper
-
 from openpyxl import load_workbook
 
 CURRENT_DIR = os.getcwd()
@@ -49,4 +49,15 @@ def test_xlsx_in_archive():
 
             assert cell_a2 == 'Row A2'  # проверка A2
             assert cell_b2 == 'Row B2'  # проверка B2
+
+
+def test_pdf_in_archive():
+    with ZipFile(ZIP_FILE) as zip_file: # открываем архив
+        with zip_file.open('pdf_file.pdf') as pdf_file: # открываем файл в архиве
+            reader = PdfReader(pdf_file)
+            page = reader.pages[0]
+            text = page.extract_text()
+
+            assert 'Row A2' in text
+            assert 'Row B2' in text
 
