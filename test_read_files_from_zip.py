@@ -4,15 +4,55 @@ import csv
 from zipfile import ZipFile
 import pytest
 from io import TextIOWrapper
-from openpyxl import load_workbook
+from openpyxl import load_workbook, Workbook
+from reportlab.pdfgen import canvas
 
 CURRENT_DIR = os.getcwd()
 RESOURCES_DIR = os.path.join(CURRENT_DIR, 'resources')
 ZIP_FILE = os.path.join(RESOURCES_DIR, 'archive.zip')
+TEST_DATA = {
+    'csv': [['Header A1', 'Header B1'], ['Cell A2', 'Cell B2']],
+    'xlsx': [['Header A1', 'Header B1'], ['Cell A2', 'Cell B2']],
+    'pdf': 'Test content\nCell A2  |  Cell B2'
+}
 
 
 @pytest.fixture(scope="module", autouse=True)
-def create_archive():
+def prepare_test_files():
+    if not os.path.exists(RESOURCES_DIR):
+        os.mkdir(RESOURCES_DIR)
+
+    csv_path = os.path.join(RESOURCES_DIR, 'csv_file.csv')
+    xlsx_path = os.path.join(RESOURCES_DIR, 'xlsx_file.xlsx')
+    pdf_path = os.path.join(RESOURCES_DIR, 'pdf_file.pdf')
+
+    with open(csv_path, 'w', newline='', encoding='utf-8-sig') as f:
+        writer = csv.writer(f)
+        for row in TEST_DATA['csv']:
+            writer.writerow(row)
+
+    wb = Workbook()
+    ws = wb.active
+    for row_data in TEST_DATA['xlsx']:
+        ws.append(row_data)
+    wb.save(xlsx_path)
+
+    c = canvas.Canvas(pdf_path)
+    c.drawString(100, 750, TEST_DATA['pdf'])
+    c.save()
+
+    yield
+
+    for path in [csv_path, xlsx_path, pdf_path]:
+        if os.path.exists(path):
+            os.remove(path)
+
+    if os.path.exists(RESOURCES_DIR) and not os.listdir(RESOURCES_DIR):
+        os.rmdir(RESOURCES_DIR)  # Удаляем папку, если пустая
+
+
+@pytest.fixture(scope="module", autouse=True)
+def create_archive(prepare_test_files):
     if not os.path.exists(RESOURCES_DIR):
         os.mkdir(RESOURCES_DIR)
 
@@ -30,34 +70,34 @@ def create_archive():
 
 
 def test_csv_in_archive():
-    with ZipFile(ZIP_FILE) as zip_file: # открываем архив
-        with zip_file.open('csv_file.csv') as csv_file: # открываем файл в архиве
-            csvreader = list(csv.reader(TextIOWrapper(csv_file, 'utf-8-sig'), delimiter=';')) # читаем содержимое файла и преобразуем его в список и декодируем его если в файле есть символы не из английского алфавита
-            second_row = csvreader[1] # получаем вторую строку
+    with ZipFile(ZIP_FILE) as zip_file:  # открываем архив
+        with zip_file.open('csv_file.csv') as csv_file:  # открываем файл в архиве
+            csvreader = list(csv.reader(TextIOWrapper(csv_file,
+                                                      'utf-8-sig')))  # читаем содержимое файла и преобразуем его в список и декодируем его если в файле есть символы не из английского алфавита
+            second_row = csvreader[1]  # получаем вторую строку
 
-            assert second_row[0] == 'Row A2'
-            assert second_row[1] == 'Row B2' # проверка значения элемента во втором столбце второй строки
+            assert second_row[0] == TEST_DATA['csv'][1][0]
+            assert second_row[1] == TEST_DATA['csv'][1][1]
 
 
 def test_xlsx_in_archive():
-    with ZipFile(ZIP_FILE) as zip_file: # открываем архив
-        with zip_file.open('xlsx_file.xlsx') as xlsx_file: # открываем файл в архиве
+    with ZipFile(ZIP_FILE) as zip_file:  # открываем архив
+        with zip_file.open('xlsx_file.xlsx') as xlsx_file:  # открываем файл в архиве
             workbook = load_workbook(xlsx_file)  # ← передаём поток напрямую
             sheet = workbook.active
             cell_a2 = sheet.cell(row=2, column=1).value
             cell_b2 = sheet.cell(row=2, column=2).value
 
-            assert cell_a2 == 'Row A2'  # проверка A2
-            assert cell_b2 == 'Row B2'  # проверка B2
+            assert cell_a2 == TEST_DATA['xlsx'][1][0]  # проверка A2
+            assert cell_b2 == TEST_DATA['xlsx'][1][1]  # проверка B2
 
 
 def test_pdf_in_archive():
-    with ZipFile(ZIP_FILE) as zip_file: # открываем архив
-        with zip_file.open('pdf_file.pdf') as pdf_file: # открываем файл в архиве
+    with ZipFile(ZIP_FILE) as zip_file:  # открываем архив
+        with zip_file.open('pdf_file.pdf') as pdf_file:  # открываем файл в архиве
             reader = PdfReader(pdf_file)
             page = reader.pages[0]
             text = page.extract_text()
 
-            assert 'Row A2' in text
-            assert 'Row B2' in text
-
+            for part in TEST_DATA['pdf'].split('\n'):
+                assert part.strip() in text
