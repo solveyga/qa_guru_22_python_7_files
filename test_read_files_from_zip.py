@@ -4,6 +4,7 @@ from zipfile import ZipFile
 import pytest
 from io import TextIOWrapper
 
+from openpyxl import load_workbook
 
 CURRENT_DIR = os.getcwd()
 RESOURCES_DIR = os.path.join(CURRENT_DIR, 'resources')
@@ -34,5 +35,18 @@ def test_csv_in_archive():
             csvreader = list(csv.reader(TextIOWrapper(csv_file, 'utf-8-sig'), delimiter=';')) # читаем содержимое файла и преобразуем его в список и декодируем его если в файле есть символы не из английского алфавита
             second_row = csvreader[1] # получаем вторую строку
 
-            assert second_row[0] == 'Row A2' # проверка значения элемента в первом столбце второй строки
+            assert second_row[0] == 'Row A2'
             assert second_row[1] == 'Row B2' # проверка значения элемента во втором столбце второй строки
+
+
+def test_xlsx_in_archive():
+    with ZipFile(ZIP_FILE) as zip_file: # открываем архив
+        with zip_file.open('xlsx_file.xlsx') as xlsx_file: # открываем файл в архиве
+            workbook = load_workbook(xlsx_file)  # ← передаём поток напрямую
+            sheet = workbook.active
+            cell_a2 = sheet.cell(row=2, column=1).value
+            cell_b2 = sheet.cell(row=2, column=2).value
+
+            assert cell_a2 == 'Row A2'  # проверка A2
+            assert cell_b2 == 'Row B2'  # проверка B2
+
