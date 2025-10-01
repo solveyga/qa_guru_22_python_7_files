@@ -1,10 +1,11 @@
-import os
-from pypdf import PdfReader
 import csv
-from zipfile import ZipFile
-import pytest
+import os
 from io import TextIOWrapper
-from openpyxl import load_workbook, Workbook
+from zipfile import ZipFile
+
+import pytest
+from openpyxl import Workbook, load_workbook
+from pypdf import PdfReader
 from reportlab.pdfgen import canvas
 
 CURRENT_DIR = os.getcwd()
@@ -19,6 +20,7 @@ TEST_DATA = {
 
 @pytest.fixture(scope="module", autouse=True)
 def prepare_test_files():
+    """Генерирует тестовые файлы *.csv, *.xlsx, *.pdf."""
     if not os.path.exists(RESOURCES_DIR):
         os.mkdir(RESOURCES_DIR)
 
@@ -48,13 +50,12 @@ def prepare_test_files():
             os.remove(path)
 
     if os.path.exists(RESOURCES_DIR) and not os.listdir(RESOURCES_DIR):
-        os.rmdir(RESOURCES_DIR)  # Удаляем папку, если пустая
+        os.rmdir(RESOURCES_DIR)
 
 
 @pytest.fixture(scope="module", autouse=True)
 def create_archive(prepare_test_files):
-    if not os.path.exists(RESOURCES_DIR):
-        os.mkdir(RESOURCES_DIR)
+    """Архивирует тестовые файлы."""
 
     files = [f for f in os.listdir(RESOURCES_DIR) if f.lower().endswith(('.pdf', '.xlsx', '.csv'))]
 
@@ -70,31 +71,34 @@ def create_archive(prepare_test_files):
 
 
 def test_csv_in_archive():
-    with ZipFile(ZIP_FILE) as zip_file:  # открываем архив
-        with zip_file.open('csv_file.csv') as csv_file:  # открываем файл в архиве
+    """Проверяет чтение CSV-файла из архива."""
+    with ZipFile(ZIP_FILE) as zip_file:
+        with zip_file.open('csv_file.csv') as csv_file:
             csvreader = list(csv.reader(TextIOWrapper(csv_file,
-                                                      'utf-8-sig')))  # читаем содержимое файла и преобразуем его в список и декодируем его если в файле есть символы не из английского алфавита
-            second_row = csvreader[1]  # получаем вторую строку
+                                                      'utf-8-sig')))
+            second_row = csvreader[1]
 
             assert second_row[0] == TEST_DATA['csv'][1][0]
             assert second_row[1] == TEST_DATA['csv'][1][1]
 
 
 def test_xlsx_in_archive():
-    with ZipFile(ZIP_FILE) as zip_file:  # открываем архив
-        with zip_file.open('xlsx_file.xlsx') as xlsx_file:  # открываем файл в архиве
-            workbook = load_workbook(xlsx_file)  # ← передаём поток напрямую
+    """Проверяет чтение XLSX-файла из архива."""
+    with ZipFile(ZIP_FILE) as zip_file:
+        with zip_file.open('xlsx_file.xlsx') as xlsx_file:
+            workbook = load_workbook(xlsx_file)
             sheet = workbook.active
             cell_a2 = sheet.cell(row=2, column=1).value
             cell_b2 = sheet.cell(row=2, column=2).value
 
-            assert cell_a2 == TEST_DATA['xlsx'][1][0]  # проверка A2
-            assert cell_b2 == TEST_DATA['xlsx'][1][1]  # проверка B2
+            assert cell_a2 == TEST_DATA['xlsx'][1][0]
+            assert cell_b2 == TEST_DATA['xlsx'][1][1]
 
 
 def test_pdf_in_archive():
-    with ZipFile(ZIP_FILE) as zip_file:  # открываем архив
-        with zip_file.open('pdf_file.pdf') as pdf_file:  # открываем файл в архиве
+    """Проверяет чтение PDF-файла из архива."""
+    with ZipFile(ZIP_FILE) as zip_file:
+        with zip_file.open('pdf_file.pdf') as pdf_file:
             reader = PdfReader(pdf_file)
             page = reader.pages[0]
             text = page.extract_text()
